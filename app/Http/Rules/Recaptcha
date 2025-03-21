@@ -1,0 +1,58 @@
+<?php
+
+namespace App\Rules;
+
+use Illuminate\Contracts\Validation\Rule;
+use GuzzleHttp\Client;
+
+class Recaptcha implements Rule
+{
+    /**
+     * Menyimpan pesan error jika validasi gagal.
+     */
+    private $errorMessage;
+
+    /**
+     * Menjalankan validasi reCAPTCHA.
+     */
+    public function passes($attribute, $value): bool
+    {
+        if (!$value) {
+            $this->errorMessage = 'Token reCAPTCHA tidak ditemukan.';
+            return false;
+        }
+
+        $secretKey = config('services.recaptcha.secret');
+        $client = new Client();
+
+        try {
+            $response = $client->post('https://www.google.com/recaptcha/api/siteverify', [
+                'form_params' => [
+                    'secret'   => $secretKey,
+                    'response' => $value,
+                    'remoteip' => request()->ip(),
+                ],
+            ]);
+
+            $body = json_decode($response->getBody(), true);
+
+            if (!isset($body['success']) || !$body['success']) {
+                $this->errorMessage = 'Verifikasi reCAPTCHA gagal.';
+                return false;
+            }
+
+            return true;
+        } catch (\Exception $e) {
+            $this->errorMessage = 'Gagal menghubungi server reCAPTCHA.';
+            return false;
+        }
+    }
+
+    /**
+     * Pesan kesalahan yang akan ditampilkan jika validasi gagal.
+     */
+    public function message(): string
+    {
+        return $this->errorMessage ?? 'Verifikasi reCAPTCHA tidak valid.';
+    }
+}
